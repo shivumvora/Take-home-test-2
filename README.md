@@ -1,49 +1,55 @@
-Personal Explanations
+# Personal Explanations
 
 Hi, thank you for the opportunity. I got to learn a lot; I hadn't gotten to use cli integrations with snowflake and dbt much before, only IDEs. I wanted to explain my thought process here on top of the summary of decisions provided below.
 
 My understanding of this exercise after seeing the capabilites of LLMs like claude code paired with snow cli is that any engineer should be able to build a warehouse with just a few prompts. What sets professional experience apart from just configuring connectors and writing prompts is the ability to know when your coding agent may be incorrect while being able to provide a reasonable explanation for architectural decisions.
+
 My goal here was to build a DWH in the medallion architecture, accounting for data issues surfaced in the source files as well as pointing out what I would do differently given the time to build a large scale enterprise data warehouse. 
 
 Keeping it simple, bronze was built to house raw data in snowflake. I named it by source, so as the company scales and requires more sources, it wouldn't affect our design. As an example, this would help if we have let's say 3 different customer sources to differentiate but will be combined downstream. Different than the staged csv files ingested in the same schema but in a table format for longevity. 
+
 Everything after bronze, I used dbt for. I chose to use dbt instead of Snow stored procedures because it allows for automatic DAG/lineage observability and I am more familiar with the syntax. 
-Silver I split into 2, staging vs intermediate; staging wasn't needed in this case but in an enterprise solution, this design will be useful. Staging is strictly for data type changes, renames of fields, adding traceable audit columns, etc. Int is where the transformations happen, all the logic changes and filters being in one place help troubleshooting down the line; (don't have to search the whole DAG for issues). 
+
+Silver I split into 2, staging vs intermediate; staging wasn't needed in this case but in an enterprise solution, this design will be useful. Staging is strictly for data type changes, renames of fields, adding extra metadata/audit columns, etc. Int is where the transformations happen, all the logic changes and filters being in one place help troubleshooting down the line; (don't have to search the whole DAG for issues). 
+
 Everything in silver I created as views, reason being simply that it saves compute overhead in a production environment. These int views wouldn't be queried except through the dbt runs, making them very cost effective. If we suddenly saw a lot of query activity on the silver views, that's when the decision could be justified to convert them into tables.
 
-Gold is also self explanatory, this is where the data model lies. Using the sample data, I was unsure if dim location or brand would be needed as separate dims instead of as attributes to products or inventory. I included only location but with more time and analysis, I believe brand could also become one.  Customer and product dims were designed as SCD type 2 because in just 2 days, I saw an important change in the values of their unique grain key. These are designed as tables because they will be queried often and can't be rebuilt each time a query hits it. Strategy is incremental merge, one to save on compute that results from truncate and load but the merge on unique key also accounts for a new file that comes in with half old data and half new data. 
-For both bronze and gold, in an enterprise solution I would make this an iceberg table for platform independence and storage/compute cost benfits; elaborated on this below. 
+Gold is also self explanatory, this is where the data model lies. Using the sample data, I was unsure if dim location or brand would be needed as separate dims instead of as attributes to products or inventory. I included only location but with more time and analysis, I believe brand could also become one.  Customer and product dims were designed as SCD type 2 because in just 2 days, I saw an important change in the attribute fields for the same unique grain key. These are designed as tables because they will be queried often and can't be rebuilt each time a query hits it. Strategy is incremental merge, one to save on compute that results from truncate and load but the merge on unique key also accounts for a new file that comes in with half old data and half new data. For both bronze and gold, in an enterprise solution I would make this an iceberg table for platform independence and storage/compute cost benfits; elaborated on this below. 
 
 
-How I used AI
+## How I used AI
 
-I used Claude Code as part of VS Code with connections to Git, snow cli and dbt for most of the hands-on work. I made the design calls and pushed back where I didn't agree:
 I don't think this would have been possible within 2 hours without a native coding agent; creating a model and architecting a schema from scratch just typing and running those queries would take ages which is where I believe AI provides a huge advantage.
-It profiled the source files with a script rather than by eye, which is how the subtotal inconsistency and the late C016 came up early.
+
+I used Claude Code as part of VS Code with connections to Git, snow cli and dbt for most of the hands-on work. I made the design calls and pushed back where I didn't agree.
+
+- It profiled the source files with a script rather than by eye, which is how the subtotal inconsistency and the late C016 came up early.
 It drafted the SQL and the dbt models while I reviewed and shaped them. Some decisions went its way: it talked me into the three lineage columns in bronze after I'd said no extra columns. Others went mine: the `ECOM_SRC_` naming, the staging/intermediate split, incremental MERGE over truncate-and-reload, readable `a~b~c` keys and the `V_` view prefix.
-I batched each round of Snowflake work into single script runs, both for the credit budget and to cut down on Oauth sign-ins caused by MFA not working well with Snow CLI.
-It got things wrong a couple of times:
-The worst was loading Day 1 and Day 2 together at the start. I had it roll that back so Day 2 could be tested as a real second delivery.
-It also told me Iceberg wasn't possible on this account, reasoning from the missing external-volume privileges. That turned out to be wrong once we actually tried it
-I had it write the acceptance checks and demo queries from the source README, and I used those to verify the end result.
+- I batched each round of Snowflake work into single script runs, both for the credit budget and to cut down on Oauth sign-ins caused by Oauth credentials not saving in Snow CLI.
+- It got things wrong a couple of times:
+  - The worst was loading Day 1 and Day 2 together at the start. I had it roll that back so Day 2 could be tested as a real second delivery.
+  - It also told me Iceberg wasn't possible on this account, reasoning from the missing external-volume privileges. That turned out to be wrong once we actually tried it.
+- I had it write the acceptance checks and demo queries from the source README, and I used those to verify the end result.
 
 
-If I had more time…
+## If I had more time…
 
 These are the things I left out to stay within the timebox.
-Currently, I have no check for deleted records. Normally I do that through fivetran; I would want to learn the best way to implement a deleted record check at source or stage natively in Snowflake. Claude recommended I ask the source for a delete or tombstone signal, or for full order snapshots, so removed lines can be retired.
-Adding Orchestration, right now the steps are run by hand. I'd set up a Snowflake task graph (land → copy → dbt build → checks) with alerting on failure, with Snowpipe feeding bronze from a real bucket.
-Move dev and prod into separate databases instead of prefixed schemas. 
-Add CI/CD automation, run `dbt build` against the `dev` target on every pull request, using slim CI on modified models only, and deploy the dbt project on merge. My current company Git environment is set to run only modified objects in dbt.
-RBAC implementation, only see my role right now which makes sense for the take home but wouldn't in production. Masking policies on email and names. With multiple brands, row access policies might also be needed if brand teams should only see their own data.
-Schema drift check. Alert when a file shows up with columns bronze doesn't have. Route rows that fail typing into a rejects table with the reason, instead of only reporting them.
-Better type 2 scd implementation. Version field as I set it up does work, but I think there are better ways to do this for scaling purposes. Maybe I could switch the version key to `id~valid_from` (for example `C003~2026-09-02T15:05:00`). It's still readable and at the true grain, and unlike a version number it doesn't shift meaning when a late version is inserted. 
-Add dbt unit tests for the history macro, into the yml. Also I normally wouldn't do this transformation through a macro like this, instead build the unique transformations into the model itself. 
-Iceberg for bronze and gold, once other engines need to read the data: on an external volume over our own bucket rather than Snowflake storage, after testing the COPY and MERGE paths mentioned above.
-Put resource monitors on each warehouse and attribute credits by query tag. This whole exercise used well under half a credit of the 5 available.
-There are many additional schemas created to house business reports, tests, metadata etc. This was done by claude and I didn't have the time to review it all but I left it in to show what production standard might look like. 
+
+- Currently, deletes are only caught for customers and products: a key missing from the latest snapshot gets flagged `is_deleted_in_source`. Normally I do that through fivetran; I would want to learn the best way to implement a deleted record check at source or stage natively in Snowflake. Claude recommended I ask the source for a delete or tombstone signal, or for full order snapshots, so removed lines can be retired.
+- Adding Orchestration, right now the steps are run by hand. I'd set up a Snowflake task graph (land → copy → dbt build → checks) with alerting on failure, with Snowpipe feeding bronze from a real bucket.
+- Move dev and prod into separate databases instead of prefixed schemas. 
+- Add CI/CD automation, run `dbt build` against the `dev` target on every pull request, using slim CI on modified models only, and deploy the dbt project on merge. My current company Git environment is set to run only modified objects in dbt.
+- RBAC implementation, only see my role right now which makes sense for the take home but wouldn't in production. Masking policies on email and names. With multiple brands, row access policies might also be needed if brand teams should only see their own data.
+- Schema drift check. Alert when a file shows up with columns bronze doesn't have. Route rows that fail typing into a rejects table with the reason, instead of only reporting them.
+- Better type 2 scd implementation. Version field as I set it up does work, but I think there are better ways to do this for scaling purposes. Maybe I could switch the version key to `id~valid_from` (for example `C003~2026-09-02T15:05:00`). It's still readable and at the true grain, and unlike a version number it doesn't shift meaning when a late version is inserted. 
+- Add dbt unit tests for the history macro, into the yml. Also I normally wouldn't do this transformation through a macro like this, instead build the unique transformations into the model itself. 
+- Iceberg for bronze and gold, once other engines need to read the data: on an external volume over our own bucket rather than Snowflake storage.
+- Put resource monitors on each warehouse and attribute credits by query tag. This whole exercise used well under half a credit of the 5 available.
+- There are many additional schemas created to house business reports, tests, metadata etc. This was done by claude and I didn't have the time to review it all but I left it in to show what production standard might look like. 
 
 
-# Commerce analytics platform on Snowflake + dbt
+## Commerce analytics platform on Snowflake + dbt
 
 This repo takes the two days of e-commerce extracts (customers, products, order headers, order lines and inventory) and builds them into a layered platform in Snowflake: a raw landing layer, a cleaned and conformed layer, and a star schema analysts can actually query. The files are tiny, but I built this the way I'd want the first slice of a real platform to look for a ~$500M multi-brand business with many sources, tens of millions of rows and a lot of downstream users. Some of it is deliberately more than 164 rows need.
 
@@ -270,6 +276,13 @@ After Day 2 it finds 5 issues, and all 5 are real:
 
 The same file also shows how much collapses between bronze and gold. It traces O1005 and O1020 back to the exact file and row they arrived in: O1005's PAID and CANCELLED versions come from different files, while O1020's duplicate is rows 10 and 11 of the same file. It also lays out the subtotal conventions order by order.
 
+
+## Monitoring in production
+
+- **Loads.** Alert on `COPY_HISTORY` errors and partial loads, and on deliveries that should have landed but didn't, by checking landed files against a delivery calendar per source.
+- **Freshness.** Run dbt source freshness on `_loaded_at`, with thresholds tied to each source's SLA.
+- **Data quality.** Snapshot `V_DQ_SUMMARY` after every run. Page on error-severity checks, and trend the warn counts, since a sudden jump means something even when nothing breaks. Watch row counts and totals between deliveries.
+- **Pipeline runs.** dbt project runs log to the Snowflake event table, so alert on failed `EXECUTE DBT PROJECT` runs and on long runtimes. Because dbt only reports inserts for a MERGE, pull inserted and updated counts per table from `QUERY_HISTORY` using the `dbt_dwh` query tag.
 
 ## If the data grew to 30M+ rows
 
