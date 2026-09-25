@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: dq_issues
+    description: >
+      One row per detected data-quality issue (view V_DQ_ISSUES): check_name, severity
+      (error / warn / info), entity, record_key and a human-readable detail.
+  - name: dq_summary
+    description: >
+      Every data-quality check with its description and current issue count, including
+      checks with zero issues (view V_DQ_SUMMARY).

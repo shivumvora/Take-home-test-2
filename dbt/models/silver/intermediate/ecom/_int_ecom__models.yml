@@ -1,0 +1,118 @@
+version: 2
+
+# Intermediate: deduplicated, conformed entities that gold selects from directly.
+# Derived only from staging, so rebuilding from bronze always yields the same result.
+# Referential checks warn instead of failing: a late-arriving customer or product
+# should be reported, not block the pipeline.
+
+models:
+  - name: int_ecom__orders_current
+    description: "Grain: one row per order_id, the latest version received. Key: order_id."
+    columns:
+      - name: order_id
+        description: Source order key. Unique.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('int_ecom__customers_history')
+                field: customer_id
+              config: {severity: warn}
+      - name: _source_row_count
+        description: Rows received for this order_id across all deliveries, including exact duplicates.
+      - name: _version_count
+        description: Distinct versions (by business content) received for this order_id.
+
+  - name: int_ecom__order_lines_current
+    description: "Grain: one row per order line, the latest version received. Key: order_line_id."
+    columns:
+      - name: order_line_id
+        description: Source line key. Unique.
+        data_tests: [unique, not_null]
+      - name: order_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('int_ecom__orders_current')
+                field: order_id
+              config: {severity: warn}
+      - name: product_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('int_ecom__products_history')
+                field: product_id
+              config: {severity: warn}
+      - name: _source_row_count
+        description: Rows received for this line across all deliveries, including exact duplicates.
+      - name: _version_count
+        description: Distinct versions (by business content) received for this line.
+
+  - name: int_ecom__inventory_snapshots
+    description: "Grain: one row per snapshot_date + location_id + product_id. Key: inventory_snapshot_id."
+    columns:
+      - name: inventory_snapshot_id
+        description: snapshot_date~location_id~product_id. Unique.
+        data_tests: [unique, not_null]
+      - name: product_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('int_ecom__products_history')
+                field: product_id
+              config: {severity: warn}
+      - name: _source_row_count
+        description: Rows received for this snapshot key, including duplicates.
+
+  - name: int_ecom__customers_history
+    description: >
+      Type 2 customer history. Grain: one row per customer per distinct version.
+      Key: customer_version_id (customer_id~version_number). valid_from/valid_to are
+      source updated_at times, UTC, with valid_to exclusive and NULL on the current version.
+    columns:
+      - name: customer_version_id
+        description: customer_id~version_number. Unique.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        description: Source customer key; exactly one current version each.
+        data_tests: [not_null, has_one_current_version]
+      - name: valid_from
+        description: Version start (source updated_at), UTC, inclusive.
+        data_tests: [not_null, valid_period]
+      - name: valid_to
+        description: Version end (next version's valid_from), UTC, exclusive. NULL on the current version.
+      - name: is_current
+        description: TRUE for the latest version of the customer.
+      - name: is_deleted_in_source
+        description: TRUE when the customer is missing from the latest snapshot delivery.
+      - name: first_seen_delivery_date
+        description: Delivery that first carried this version.
+      - name: last_seen_delivery_date
+        description: Latest delivery that carried this customer (any version).
+
+  - name: int_ecom__products_history
+    description: >
+      Type 2 product history. Grain: one row per product per distinct version.
+      Key: product_version_id (product_id~version_number). valid_from/valid_to are
+      source updated_at times, UTC, with valid_to exclusive and NULL on the current version.
+    columns:
+      - name: product_version_id
+        description: product_id~version_number. Unique.
+        data_tests: [unique, not_null]
+      - name: product_id
+        description: Source product key; exactly one current version each.
+        data_tests: [not_null, has_one_current_version]
+      - name: valid_from
+        description: Version start (source updated_at), UTC, inclusive.
+        data_tests: [not_null, valid_period]
+      - name: valid_to
+        description: Version end (next version's valid_from), UTC, exclusive. NULL on the current version.
+      - name: is_current
+        description: TRUE for the latest version of the product.
+      - name: is_deleted_in_source
+        description: TRUE when the product is missing from the latest snapshot delivery.
+      - name: first_seen_delivery_date
+        description: Delivery that first carried this version.
+      - name: last_seen_delivery_date
+        description: Latest delivery that carried this product (any version).

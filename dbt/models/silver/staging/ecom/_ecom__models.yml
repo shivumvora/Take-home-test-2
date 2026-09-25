@@ -1,0 +1,162 @@
+version: 2
+
+# Staging: one view per bronze table, same grain as bronze (every delivered row,
+# duplicates included). Renames to house conventions, trims, converts empty strings
+# to NULL, casts text to proper types with TRY_ functions and converts timestamps to UTC.
+# No filtering, deduplication or business logic.
+#
+# Conventions: *_at = TIMESTAMP_NTZ in UTC, *_date = DATE, is_* = BOOLEAN,
+# *_amount = NUMBER(12,2) in USD. _record_hash = MD5 of business columns (excludes
+# updated_at and lineage) for change detection. delivery_date comes from the file name.
+#
+# Because bronze arrives with no blank values, a NULL in a typed column means a value
+# was blank or could not be cast. not_null tests on keys fail the build; on other typed
+# columns they warn and are reported as data-quality issues.
+
+models:
+  - name: stg_ecom__customers
+    description: "Grain: one row per customer per delivered snapshot file (duplicates kept). Key for history: customer_id + delivery_date."
+    columns:
+      - name: customer_id
+        description: Source customer key.
+        data_tests: [not_null]
+      - name: email
+        description: Lower-cased email address (PII).
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: loyalty_tier
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Bronze", "Silver", "Gold"]
+              config: {severity: warn}
+      - name: is_active
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: created_at
+        description: Customer creation time, UTC.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: updated_at
+        description: Last change time in the source, UTC.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: delivery_date
+        description: Delivery (snapshot) date parsed from the source file name.
+        data_tests: [not_null]
+
+  - name: stg_ecom__products
+    description: "Grain: one row per product per delivered snapshot file (duplicates kept). Key for history: product_id + delivery_date."
+    columns:
+      - name: product_id
+        description: Source product key.
+        data_tests: [not_null]
+      - name: list_price
+        description: Current list price, USD.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: unit_cost
+        description: Current unit cost, USD.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: is_active
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: updated_at
+        description: Last change time in the source, UTC.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: delivery_date
+        description: Delivery (snapshot) date parsed from the source file name.
+        data_tests: [not_null]
+
+  - name: stg_ecom__order_headers
+    description: "Grain: one row per delivered order-header record. An order_id appears once per version received, plus any exact duplicates."
+    columns:
+      - name: order_id
+        description: Source order key.
+        data_tests: [not_null]
+      - name: customer_id
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: order_status
+        description: Upper-cased order status.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["PAID", "CANCELLED"]
+              config: {severity: warn}
+      - name: currency_code
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["USD"]
+              config: {severity: warn}
+      - name: total_amount
+        description: Order total = subtotal - discount + tax + shipping, USD.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: ordered_at
+        description: Order placement time, UTC.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: updated_at
+        description: Version time in the source, UTC. Orders the versions of an order_id.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: delivery_date
+        data_tests: [not_null]
+
+  - name: stg_ecom__order_lines
+    description: "Grain: one row per delivered order-line record. A line_id (order_line_id) appears once per version received, plus any exact duplicates."
+    columns:
+      - name: order_line_id
+        description: Source line key (line_id).
+        data_tests: [not_null]
+      - name: order_id
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: product_id
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: quantity
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: unit_price
+        description: Price charged per unit at time of sale, USD.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: line_total_amount
+        description: quantity * unit_price - line_discount_amount, USD.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: updated_at
+        description: Version time in the source, UTC. Orders the versions of a line.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: delivery_date
+        data_tests: [not_null]
+
+  - name: stg_ecom__inventory
+    description: "Grain: one row per delivered inventory record (snapshot_date + location_id + product_id; duplicates kept)."
+    columns:
+      - name: snapshot_date
+        description: Inventory as-of date.
+        data_tests: [not_null]
+      - name: location_id
+        description: Upper-cased warehouse code.
+        data_tests: [not_null]
+      - name: product_id
+        data_tests: [not_null]
+      - name: on_hand_qty
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: reserved_qty
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: available_qty
+        description: Source-reported on_hand_qty - reserved_qty.
+        data_tests:
+          - not_null: {config: {severity: warn}}
+      - name: delivery_date
+        data_tests: [not_null]

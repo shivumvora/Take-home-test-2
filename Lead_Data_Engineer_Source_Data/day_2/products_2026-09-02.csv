@@ -1,0 +1,14 @@
+product_id,sku,product_name,category,brand,list_price,unit_cost,is_active,updated_at
+P001,NS-HAT-001,Trail Cap,Headwear,Northstar,38.00,13.00,TRUE,2026-08-01T00:00:00Z
+P002,NS-HAT-002,Summit Cap,Headwear,Northstar,42.00,14.50,TRUE,2026-08-01T00:00:00Z
+P003,NS-TEE-001,Everyday Tee,Apparel,Northstar,32.00,10.50,TRUE,2026-08-01T00:00:00Z
+P004,FT-SDL-001,Coast Sandal,Footwear,Field & Tide,74.00,26.00,TRUE,2026-09-02T12:00:00Z
+P005,FT-SDL-002,Reef Sandal,Footwear,Field & Tide,78.00,29.00,TRUE,2026-08-01T00:00:00Z
+P006,FT-TEE-001,Harbor Tee,Apparel,Field & Tide,36.00,11.75,TRUE,2026-08-01T00:00:00Z
+P007,RV-PNT-001,Transit Pant,Apparel,Rove,88.00,34.00,TRUE,2026-08-01T00:00:00Z
+P008,RV-JKT-001,Packable Jacket,Outerwear,Rove,128.00,51.00,FALSE,2026-09-02T12:05:00Z
+P009,RV-BAG-001,Daypack,Bags,Rove,96.00,38.00,TRUE,2026-08-01T00:00:00Z
+P010,NS-SCK-001,Performance Sock,Accessories,Northstar,18.00,5.25,TRUE,2026-08-01T00:00:00Z
+P011,FT-TWL-001,Beach Towel,Accessories,Field & Tide,44.00,15.00,TRUE,2026-08-01T00:00:00Z
+P012,RV-BTL-001,Travel Bottle,Accessories,Rove,28.00,8.50,TRUE,2026-08-01T00:00:00Z
+P013,NS-BAG-002,Commuter Tote,Bags,Northstar,64.00,24.00,TRUE,2026-09-02T12:10:00Z

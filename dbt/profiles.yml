@@ -1,0 +1,27 @@
+# Used by dbt Projects on Snowflake, which runs as the calling Snowflake user,
+# so account and user are intentionally blank. No credentials belong in this file.
+dwh:
+  target: prod
+  outputs:
+    prod:
+      type: snowflake
+      account: ""
+      user: ""
+      role: CANDIDATE_SHIVUM_ROLE
+      database: CANDIDATE_SHIVUM
+      warehouse: CANDIDATE_SHIVUM_WH
+      schema: SILVER
+      threads: 4
+      query_tag: dbt_dwh
+    # Developer sandbox: every layer builds into DEV_<LAYER> schemas instead of the
+    # shared ones (see macros/generate_schema_name.sql).
+    dev:
+      type: snowflake
+      account: ""
+      user: ""
+      role: CANDIDATE_SHIVUM_ROLE
+      database: CANDIDATE_SHIVUM
+      warehouse: CANDIDATE_SHIVUM_WH
+      schema: DEV
+      threads: 4
+      query_tag: dbt_dwh_dev
