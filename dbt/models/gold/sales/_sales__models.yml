@@ -1,0 +1,88 @@
+version: 2
+
+models:
+  - name: fct_order_lines
+    description: >
+      Sales fact. Grain: one row per order line (current version). Key: order_line_id.
+      Revenue comes from line totals. Cancelled orders are kept and flagged is_cancelled.
+      customer_key and product_key are the versions in force at ordered_at.
+    columns:
+      - name: order_line_id
+        description: Source line key. Unique.
+        data_tests: [unique, not_null]
+      - name: order_id
+        description: Degenerate dimension; joins to fct_orders.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fct_orders')
+                field: order_id
+              config: {severity: warn}
+      - name: order_date
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: customer_key
+        description: Customer version at order time; UNKNOWN~0 when no customer matches.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_key
+      - name: product_key
+        description: Product version at order time; UNKNOWN~0 when no product matches.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: product_key
+      - name: is_cancelled
+        description: TRUE when the order's current status is CANCELLED.
+      - name: gross_amount
+        description: quantity * unit_price, USD.
+      - name: discount_amount
+        description: Line discount, USD.
+      - name: net_amount
+        description: Line total after discount (gross - discount), USD. The revenue measure.
+      - name: cost_amount
+        description: quantity * unit_cost of the product version at order time, USD.
+      - name: margin_amount
+        description: net_amount - cost_amount, USD.
+      - name: _source_loaded_at
+        description: Latest bronze load time of the line or its header; the incremental watermark.
+
+  - name: fct_orders
+    description: >
+      Order fact. Grain: one row per order (current version). Key: order_id.
+      Header amounts (tax, shipping, total) plus line roll-ups and a header-to-lines
+      reconciliation flag.
+    columns:
+      - name: order_id
+        description: Source order key. Unique.
+        data_tests: [unique, not_null]
+      - name: order_date
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: customer_key
+        description: Customer version at order time; UNKNOWN~0 when no customer matches.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_key
+      - name: total_amount
+        description: Header total = subtotal - discount + tax + shipping, USD.
+      - name: lines_net_amount
+        description: Sum of line net amounts, USD.
+      - name: is_reconciled
+        description: TRUE when subtotal - discount equals lines_net_amount.
+      - name: _source_loaded_at
+        description: Latest bronze load time of the header or any of its lines; the incremental watermark.

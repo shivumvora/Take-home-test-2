@@ -1,0 +1,70 @@
+version: 2
+
+# Conformed dimensions shared by every business process (sales, inventory, ...).
+# Keys are readable business values: <id>~<version> for type 2 dimensions, natural keys
+# otherwise. Each type 2 dimension has an UNKNOWN~0 member so facts never drop rows.
+
+models:
+  - name: dim_customer
+    description: >
+      Type 2 customer dimension. Grain: one row per customer version, plus UNKNOWN~0.
+      Key: customer_key (customer_id~version_number). Contains PII (name, email).
+    columns:
+      - name: customer_key
+        description: customer_id~version_number, e.g. C003~2. Unique.
+        data_tests: [unique, not_null]
+      - name: customer_id
+        description: Source customer key.
+        data_tests: [not_null]
+      - name: valid_from
+        description: Version start (source updated_at), UTC.
+      - name: valid_to
+        description: Version end (exclusive), UTC. NULL on the current version.
+      - name: effective_from
+        description: Fact join window start. 1900-01-01 on the first version so late-arriving customers still match.
+      - name: effective_to
+        description: Fact join window end (exclusive). 9999-12-31 on the current version.
+      - name: is_current
+        description: TRUE for the latest version.
+      - name: is_deleted_in_source
+        description: TRUE when the customer is missing from the latest snapshot.
+      - name: _row_hash
+        description: Hash of the row content; the incremental merge writes only rows whose hash changed.
+
+  - name: dim_product
+    description: >
+      Type 2 product dimension. Grain: one row per product version, plus UNKNOWN~0.
+      Key: product_key (product_id~version_number). Brand and category are attributes.
+    columns:
+      - name: product_key
+        description: product_id~version_number, e.g. P004~2. Unique.
+        data_tests: [unique, not_null]
+      - name: product_id
+        description: Source product key.
+        data_tests: [not_null]
+      - name: list_price
+        description: List price for this version, USD.
+      - name: unit_cost
+        description: Unit cost for this version, USD. Used for cost and margin at time of sale.
+      - name: effective_from
+        description: Fact join window start. 1900-01-01 on the first version.
+      - name: effective_to
+        description: Fact join window end (exclusive). 9999-12-31 on the current version.
+      - name: is_current
+        description: TRUE for the latest version.
+      - name: is_deleted_in_source
+        description: TRUE when the product is missing from the latest snapshot.
+
+  - name: dim_location
+    description: "Stock-holding locations. Grain: one row per location. Key: location_id."
+    columns:
+      - name: location_id
+        description: Warehouse code, e.g. WH_WEST. Unique.
+        data_tests: [unique, not_null]
+
+  - name: dim_date
+    description: "Calendar, 2020-01-01 to 2030-12-31. Grain: one row per day. Key: date_day."
+    columns:
+      - name: date_day
+        description: Calendar date. Unique.
+        data_tests: [unique, not_null]

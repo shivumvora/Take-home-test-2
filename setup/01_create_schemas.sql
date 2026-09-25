@@ -13,4 +13,11 @@ CREATE SCHEMA IF NOT EXISTS SILVER
 CREATE SCHEMA IF NOT EXISTS GOLD
     COMMENT = 'Analytics-ready dimensional model (facts and dimensions) and reporting views for downstream users.';
 
+CREATE SCHEMA IF NOT EXISTS QUALITY
+    COMMENT = 'Data-quality results for data stewards: detected issues and a per-check summary.';
+
+-- Platform objects that are not data: the dbt project object and its source stage.
+CREATE SCHEMA IF NOT EXISTS OPS
+    COMMENT = 'Platform and orchestration objects (dbt project, deployment stage). No business data.';
+
 SHOW SCHEMAS IN DATABASE CANDIDATE_SHIVUM;

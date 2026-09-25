@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: fct_inventory_snapshot
+    description: >
+      Daily inventory snapshot fact. Grain: one row per snapshot_date + location + product.
+      Key: inventory_snapshot_id (snapshot_date~location_id~product_id). Quantities are
+      semi-additive: sum across locations and products, not across dates.
+    columns:
+      - name: inventory_snapshot_id
+        description: snapshot_date~location_id~product_id, e.g. 2026-09-01~WH_WEST~P001. Unique.
+        data_tests: [unique, not_null]
+      - name: snapshot_date
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: location_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_location')
+                field: location_id
+      - name: product_key
+        description: Product version at snapshot time; UNKNOWN~0 when no product matches.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: product_key
+      - name: on_hand_value_at_cost
+        description: on_hand_qty * unit_cost of the product version at snapshot time, USD.
+      - name: _source_loaded_at
+        description: Bronze load time of the snapshot row; the incremental watermark.

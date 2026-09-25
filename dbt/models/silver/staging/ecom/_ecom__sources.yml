@@ -1,0 +1,26 @@
+version: 2
+
+sources:
+  - name: ecom
+    description: >
+      E-commerce platform extracts landed as-is in BRONZE by COPY INTO (see bronze/).
+      All source columns are text; every row carries _source_file_name,
+      _source_file_row_number and _loaded_at lineage.
+    database: "{{ target.database }}"
+    schema: BRONZE
+    tables:
+      - name: customers
+        identifier: ECOM_SRC_CUSTOMERS
+        description: Full customer snapshot per delivery file. Source key customer_id.
+      - name: products
+        identifier: ECOM_SRC_PRODUCTS
+        description: Full product snapshot per delivery file. Source key product_id.
+      - name: order_headers
+        identifier: ECOM_SRC_ORDER_HEADERS
+        description: Incremental order headers. An order_id reappears when the order changes; exact duplicates can occur.
+      - name: order_lines
+        identifier: ECOM_SRC_ORDER_LINES
+        description: Incremental order lines. A line_id reappears when the line is corrected; exact duplicates can occur.
+      - name: inventory
+        identifier: ECOM_SRC_INVENTORY
+        description: Daily point-in-time inventory snapshot. Key snapshot_date + location_id + product_id.

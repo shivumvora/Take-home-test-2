@@ -1,0 +1,12 @@
+version: 2
+
+models:
+  - name: rpt_daily_sales
+    description: >
+      Daily sales by brand and category (view V_RPT_DAILY_SALES). Grain: order_date + brand +
+      category. Net sales, units, cost and margin exclude cancelled orders; cancellations are
+      counted separately.
+  - name: rpt_inventory_position
+    description: >
+      Latest inventory position (view V_RPT_INVENTORY_POSITION). Grain: location + product
+      at the most recent snapshot_date, with stock value at cost.

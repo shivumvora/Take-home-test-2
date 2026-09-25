@@ -1,0 +1,47 @@
+name: dwh
+version: "1.0.0"
+config-version: 2
+profile: dwh
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages", "logs"]
+
+models:
+  dwh:
+    # Model and column descriptions become Snowflake comments, so grain and keys
+    # are visible to anyone browsing the warehouse, not only in the repo.
+    +persist_docs:
+      relation: true
+      columns: true
+
+    silver:
+      +schema: SILVER
+      +materialized: view
+      +tags: ["silver"]
+      staging:
+        +tags: ["staging"]
+      intermediate:
+        +tags: ["intermediate"]
+
+    # Gold facts and dimensions are permanent tables maintained by MERGE on their
+    # business key: only new or changed rows are written on each run, never a full
+    # truncate-and-reload. _inserted_at is kept from the first write of each row.
+    gold:
+      +schema: GOLD
+      +materialized: incremental
+      +incremental_strategy: merge
+      +on_schema_change: append_new_columns
+      +merge_exclude_columns: ["_inserted_at"]
+      +transient: false
+      +tags: ["gold"]
+      reporting:
+        +materialized: view
+        +tags: ["reporting"]
+
+    quality:
+      +schema: QUALITY
+      +materialized: view
+      +tags: ["quality"]
